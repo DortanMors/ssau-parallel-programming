@@ -1,4 +1,4 @@
-%%cuda --name curand.cu
+%%cu
 
 #include <cstdlib>
 #include <curand.h>
