@@ -1,4 +1,4 @@
-%%cu
+%%cuda --name my_curand.cu
 
 #include <cstdlib>
 #include <curand.h>
@@ -22,12 +22,13 @@ void matrixMult(const float* A, const float* B, float* C, const int m, const int
     cublasHandle_t handle;
     cublasCreate(&handle);
     cudaEvent_t start, stop;
-    double elapsedTime, allTime = 0;
+    double allTime = 0.0;
+    float elapsedTime = 0.0f;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     for (int i = 0; i < 12; i++) {
         cudaEventRecord(start, 0);
-        cublasDgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
+        cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
         cudaEventRecord(stop, 0);
         cudaDeviceSynchronize();
         cudaEventElapsedTime(&elapsedTime, start, stop);
