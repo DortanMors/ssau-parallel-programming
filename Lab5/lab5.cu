@@ -9,10 +9,11 @@
 #include <stdlib.h>
 #include <iostream>
 #include <random>
+#include <chrono>
 
 #define IDX2C(i,j,ld) (((j)*(ld))+(i))
 
-void matrixMult(const float *A, const float *B, float *C, const int m, const int k, const int n) {
+void matrixMult(const float* A, const float* B, float* C, const int m, const int k, const int n) {
     int lda=m,ldb=k,ldc=m;
     const float alf = 1;
     const float bet = 0;
@@ -22,7 +23,7 @@ void matrixMult(const float *A, const float *B, float *C, const int m, const int
     cublasHandle_t handle;
     cublasCreate(&handle);
     cudaEvent_t start, stop;
-    float elapsedTime, allTime = 0;
+    double elapsedTime, allTime = 0;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     for (int i = 0; i < 12; i++) {
@@ -31,7 +32,7 @@ void matrixMult(const float *A, const float *B, float *C, const int m, const int
         cudaEventRecord(stop, 0);
         cudaDeviceSynchronize();
         cudaEventElapsedTime(&elapsedTime, start, stop);
-        allTime += elapsedTime/1000;
+        allTime += elapsedTime * 1000;
     }
     printf("\nAverage parallel time: %f\n", allTime / 12);
     cublasDestroy(handle);
@@ -44,10 +45,10 @@ void GPU_fill_rand(float *A, int nr_rows_A, int nr_cols_A) {
     curandGenerator_t prng;
     curandCreateGenerator(&prng, CURAND_RNG_PSEUDO_DEFAULT);
     curandSetPseudoRandomGeneratorSeed(prng, (unsigned long long) clock());
-    curandGenerateUniformDouble(prng, A, nr_rows_A * nr_cols_A);
+    curandGenerateUniform(prng, A, nr_rows_A * nr_cols_A);
 }
 
-void consistent(const double* A, const double* B, double*C, const int m, const int k, const int n) {
+void consistent(const float* A, const float* B, float* C, const int m, const int k, const int n) {
     for (int i = 0; i < m; ++i) {
         for (int j = 0; j < n; ++j) {
             C[IDX2C(i, j, n)] = 0.0;
@@ -82,39 +83,40 @@ int main() {
         cudaMalloc(&d_B, nr_rows_B * nr_cols_B * sizeof(float));
         cudaMalloc(&d_C, nr_rows_C * nr_cols_C * sizeof(float));
         double t = 0;
-        for (int step=0;step<12;++step) {
-        srand(time(0));
-        double begin = clock();
-        for (int i = 0; i < nr_rows_A * nr_rows_A; i++) {
-            h_A[i] = (float)rand()/RAND_MAX;
-            h_B[i] = (float)rand()/RAND_MAX;
-        }
-        cudaMemcpy(d_A, h_A, nr_rows_A * nr_cols_A * sizeof(float), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_B, h_B, nr_rows_B * nr_cols_B * sizeof(float), cudaMemcpyHostToDevice);
-        GPU_fill_rand(d_A, nr_rows_A, nr_cols_A);
-        GPU_fill_rand(d_B, nr_rows_B, nr_cols_B);
-        cudaMemcpy(h_A, d_A, nr_rows_A * nr_cols_A*sizeof(float), cudaMemcpyDeviceToHost);
-        cudaMemcpy(h_B, d_B, nr_rows_B * nr_cols_B*sizeof(float), cudaMemcpyDeviceToHost);
-        matrixMult(h_A, h_B, h_C, nr_rows_A, nr_cols_A, nr_cols_B);
-        cudaMemcpy(h_C, d_C, nr_rows_C * nr_cols_C * sizeof(float), cudaMemcpyDeviceToHost);
+        for (int step=0; step<12; ++step) {
+            srand(time(0));
+            auto start = std::chrono::system_clock::now();
+            for (int i = 0; i < nr_rows_A * nr_rows_A; i++) {
+                h_A[i] = (float)rand()/RAND_MAX;
+                h_B[i] = (float)rand()/RAND_MAX;
+            }
+            cudaMemcpy(d_A, h_A, nr_rows_A * nr_cols_A * sizeof(float), cudaMemcpyHostToDevice);
+            cudaMemcpy(d_B, h_B, nr_rows_B * nr_cols_B * sizeof(float), cudaMemcpyHostToDevice);
+            GPU_fill_rand(d_A, nr_rows_A, nr_cols_A);
+            GPU_fill_rand(d_B, nr_rows_B, nr_cols_B);
+            cudaMemcpy(h_A, d_A, nr_rows_A * nr_cols_A*sizeof(float), cudaMemcpyDeviceToHost);
+            cudaMemcpy(h_B, d_B, nr_rows_B * nr_cols_B*sizeof(float), cudaMemcpyDeviceToHost);
+            matrixMult(h_A, h_B, h_C, nr_rows_A, nr_cols_A, nr_cols_B);
+            cudaMemcpy(h_C, d_C, nr_rows_C * nr_cols_C * sizeof(float), cudaMemcpyDeviceToHost);
 
-        double end = (clock() - begin) / CLOCKS_PER_SEC;
-        t+=end;
-    }
-    printf("\nn = %d\n", n);
-    printf("A:\n");
-    print_matrix(h_A, nr_rows_A, nr_cols_A);
-    printf("B:\n");
-    print_matrix(h_B, nr_rows_B, nr_cols_B);
-    printf("C:\n");
-    print_matrix(h_C, nr_rows_C, nr_cols_C);
-    printf("Time %f\n ", t/12);
-    cudaFree(d_A);
-    cudaFree(d_B);
-    cudaFree(d_C);
-    free(h_A);
-    free(h_B);
-    free(h_C);
+            auto end = std::chrono::system_clock::now();
+            double time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+            t += time;
+        }
+        printf("\nn = %d\n", n);
+        printf("A:\n");
+        print_matrix(h_A, nr_rows_A, nr_cols_A);
+        printf("B:\n");
+        print_matrix(h_B, nr_rows_B, nr_cols_B);
+        printf("C:\n");
+        print_matrix(h_C, nr_rows_C, nr_cols_C);
+        printf("Time %f\n ", t/12);
+        cudaFree(d_A);
+        cudaFree(d_B);
+        cudaFree(d_C);
+        free(h_A);
+        free(h_B);
+        free(h_C);
     }
     return 0;
 }
