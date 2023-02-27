@@ -7,7 +7,6 @@
 #include <malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <iostream>
 #include <random>
 #include <chrono>
 
@@ -41,7 +40,7 @@ void matrixMult(const float* A, const float* B, float* C, const int m, const int
     cudaEventDestroy(stop);
 }
 
-void GPU_fill_rand(float *A, int nr_rows_A, int nr_cols_A) {    
+void fillRandGPU(float *A, int nr_rows_A, int nr_cols_A) {    
     curandGenerator_t prng;
     curandCreateGenerator(&prng, CURAND_RNG_PSEUDO_DEFAULT);
     curandSetPseudoRandomGeneratorSeed(prng, (unsigned long long) clock());
@@ -59,8 +58,8 @@ void consistent(const float* A, const float* B, float* C, const int m, const int
     }
 }
 
-void print_matrix(float* matrix, int rows, int cols) {
-    for(int i = 0; i < 3; ++i) {
+void printMatrix(float* matrix, int rows, int cols) {
+    for (int i = 0; i < 3; ++i) {
         for(int j = 0; j < 3; ++j) {
           printf("%f ", matrix[IDX2C(i, j, 3)]);
         }
@@ -92,8 +91,8 @@ int main() {
             }
             cudaMemcpy(d_A, h_A, nr_rows_A * nr_cols_A * sizeof(float), cudaMemcpyHostToDevice);
             cudaMemcpy(d_B, h_B, nr_rows_B * nr_cols_B * sizeof(float), cudaMemcpyHostToDevice);
-            GPU_fill_rand(d_A, nr_rows_A, nr_cols_A);
-            GPU_fill_rand(d_B, nr_rows_B, nr_cols_B);
+            fillRandGPU(d_A, nr_rows_A, nr_cols_A);
+            fillRandGPU(d_B, nr_rows_B, nr_cols_B);
             cudaMemcpy(h_A, d_A, nr_rows_A * nr_cols_A*sizeof(float), cudaMemcpyDeviceToHost);
             cudaMemcpy(h_B, d_B, nr_rows_B * nr_cols_B*sizeof(float), cudaMemcpyDeviceToHost);
             matrixMult(h_A, h_B, h_C, nr_rows_A, nr_cols_A, nr_cols_B);
@@ -105,11 +104,11 @@ int main() {
         }
         printf("\nn = %d\n", n);
         printf("A:\n");
-        print_matrix(h_A, nr_rows_A, nr_cols_A);
+        printMatrix(h_A, nr_rows_A, nr_cols_A);
         printf("B:\n");
-        print_matrix(h_B, nr_rows_B, nr_cols_B);
+        printMatrix(h_B, nr_rows_B, nr_cols_B);
         printf("C:\n");
-        print_matrix(h_C, nr_rows_C, nr_cols_C);
+        printMatrix(h_C, nr_rows_C, nr_cols_C);
         printf("Time %f\n ", t/12);
         cudaFree(d_A);
         cudaFree(d_B);
