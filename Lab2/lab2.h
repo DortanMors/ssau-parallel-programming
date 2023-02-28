@@ -35,17 +35,21 @@ double sum_q(double* array, long n)
 
 void test_time(double (*method)(double*, long), std::ostream& out)
 {
+    double average_time = 0.0;
 	for (int t = 0; t < START_TIMES; ++t)
 	{
 		double* array = create_double_array(NMAX);
 		double start = omp_get_wtime();
 		double sum = method(array, NMAX);
-		double result_time = (omp_get_wtime() - start) * 1000; // time in ms
+		double result_time = (omp_get_wtime() - start) * 1000 * 1000; // time in mcs
+        average_time += result_time;
 		out << result_time << std::endl;
 		free(array);
 		printf("Total Sum = %10.2f \n", sum);
-		printf("TIME OF WORK IS %f ms\n", result_time);
+		printf("TIME OF WORK IS %f microseconds\n", result_time);
 	}
+    average_time /= START_TIMES;
+    out << "Average: " << average_time << endl;
 }
 
 double atomic_sum(double* array, long n)
@@ -127,4 +131,3 @@ double reduce_sum_q(double* array, long n)
 	}
 	return reduce_sum;
 }
-
