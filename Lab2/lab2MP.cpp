@@ -8,7 +8,7 @@ int main(int argc, char* argv[])
 	omp_set_num_threads(theads_count);
 	fstream atomic_out, critical_out, reduce_out;
 	string path("results/");
-    atomic_out.open(path + "atomic" + argv[1] + EXTENSION, ios::app);
+    atomic_out.open(path + "atomic" + argv[1] + ((argc > 2) ? "q" : "") + EXTENSION, ios::app);
     critical_out.open(path + "critical" + argv[1] + EXTENSION, ios::app);
     reduce_out.open(path + "reduce" + argv[1] + EXTENSION, ios::app);
 	

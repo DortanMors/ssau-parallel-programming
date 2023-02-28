@@ -59,7 +59,7 @@ int main(int argc, char* argv[]) {
 	if (ProcRank == 0) {
 		ofstream fout;
 		string path("results/");
-		fout.open(path + "point_to_point" + to_string(ProcNum) + ".txt", ios::app);
+        fout.open(path + "point_to_point" + to_string(ProcNum) + ((argc > 1) ? "q" : "") + ".txt", ios::app);
 		fout << sumtime << endl;
 		fout.close();
 		printf("Total Sum = %10.2f\n", TotalSum);
