@@ -1,2 +1,2 @@
 #!/bin/bash
-mpic++ -o "$1MPI" "$1.cpp"
+mpic++ -o "bin/$1bin" "$1.cpp"
