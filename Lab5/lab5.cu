@@ -1,10 +1,13 @@
-%%cuda --name my_curand.cu
+%%cuda --name lab5curand.cu
 
 #include <cstdlib>
 #include <curand.h>
 #include <cublas_v2.h>
 #include <iostream>
 #include <ctime>
+
+#define SAFE_CALL(CallInstruction) { cudaError_t cudaError = CallInstruction; if (cudaError != cudaSuccess) { printf("CUDA error: %s at call %s", cudaGetErrorString(cudaError), #CallInstruction); exit(0); } }
+#define IDX2C(i,j,ld) (((j)*(ld))+(i))
 
 using namespace std;
 
@@ -71,9 +74,9 @@ int main() {
   float *h_C_ = (float *)malloc(nr_rows_C * nr_cols_C * sizeof(float));
 
   float *d_A, *d_B, *d_C;
-  cudaMalloc(&d_A,nr_rows_A * nr_cols_A * sizeof(float));
-  cudaMalloc(&d_B,nr_rows_B * nr_cols_B * sizeof(float));
-  cudaMalloc(&d_C,nr_rows_C * nr_cols_C * sizeof(float));
+  SAFE_CALL(cudaMalloc(&d_A,nr_rows_A * nr_cols_A * sizeof(float)));
+  SAFE_CALL(cudaMalloc(&d_B,nr_rows_B * nr_cols_B * sizeof(float)));
+  SAFE_CALL(cudaMalloc(&d_C,nr_rows_C * nr_cols_C * sizeof(float)));
 
 
   GPU_fill_rand(d_A, nr_rows_A, nr_cols_A);
@@ -84,12 +87,12 @@ int main() {
   fill_matrix(h_B, nr_rows_B, nr_cols_B);
 
   double start = clock();
-  cudaMemcpy(d_A, h_A, nr_rows_A * nr_cols_A * sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_B, h_B, nr_rows_B * nr_cols_B * sizeof(float), cudaMemcpyHostToDevice);
+  SAFE_CALL(cudaMemcpy(d_A, h_A, nr_rows_A * nr_cols_A * sizeof(float), cudaMemcpyHostToDevice));
+  SAFE_CALL(cudaMemcpy(d_B, h_B, nr_rows_B * nr_cols_B * sizeof(float), cudaMemcpyHostToDevice));
   double end = clock();
 
-  cudaMemcpy(h_A, d_A, nr_rows_A * nr_cols_A * sizeof(float),cudaMemcpyDeviceToHost);
-  cudaMemcpy(h_B, d_B, nr_rows_B * nr_cols_B * sizeof(float),cudaMemcpyDeviceToHost);
+  SAFE_CALL(cudaMemcpy(h_A, d_A, nr_rows_A * nr_cols_A * sizeof(float),cudaMemcpyDeviceToHost));
+  SAFE_CALL(cudaMemcpy(h_B, d_B, nr_rows_B * nr_cols_B * sizeof(float),cudaMemcpyDeviceToHost));
 
 
   printf("A = \n");
@@ -98,22 +101,21 @@ int main() {
   printf("B = \n");
   print_matrix(h_B, 5, 5);
 
-  ///////////////////////////
   double start_ = clock();
   gpu_blas_mmul(d_A, d_B, d_C, nr_rows_A, nr_cols_A, nr_cols_B);
   //multiply(h_A, h_B, h_C_, nr_rows_A);
   double end_ = clock();
 
-  cudaMemcpy(h_C,d_C,nr_rows_C * nr_cols_C * sizeof(float),cudaMemcpyDeviceToHost);
+  SAFE_CALL(cudaMemcpy(h_C,d_C,nr_rows_C * nr_cols_C * sizeof(float),cudaMemcpyDeviceToHost));
   printf("C = \n");
   print_matrix(h_C, 5, 5);
 
   //cout << "\nParallel mul time = " << (end_ - start_) / CLOCKS_PER_SEC << endl;
   cout << "\nSendRecv time = " << (end - start) / CLOCKS_PER_SEC << endl;
 
-  cudaFree(d_A);
-  cudaFree(d_B);
-  cudaFree(d_C);
+  SAFE_CALL(cudaFree(d_A));
+  SAFE_CALL(cudaFree(d_B));
+  SAFE_CALL(cudaFree(d_C));
 
   free(h_A);
   free(h_B);
