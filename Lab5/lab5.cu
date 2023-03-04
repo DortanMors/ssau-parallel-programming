@@ -12,7 +12,7 @@
 using namespace std;
 
 
-void multiply(float* A, float* B, float* C, int N)
+void matrix_mult(float* A, float* B, float* C, int N)
 {
   int i, j, k;
   for (i = 0; i < N; i++) {
@@ -32,8 +32,7 @@ void GPU_fill_rand(float *A, int nr_rows_A, int nr_cols_A) {
   curandGenerateUniform(prng, A, nr_rows_A * nr_cols_A);
 }
 
-// C(m,n) = A(m,k) * B(k,n)
-void gpu_blas_mmul(const float *A, const float *B, float *C, const int m, const int k, const int n) {
+double gpu_blas_mmul(const float *A, const float *B, float *C, const int m, const int k, const int n) {
   int lda=m,ldb=k,ldc=m;
   const float alf = 1;
   const float bet = 0;
@@ -41,8 +40,22 @@ void gpu_blas_mmul(const float *A, const float *B, float *C, const int m, const 
   const float *beta = &bet;
   cublasHandle_t handle;
   cublasCreate(&handle);
+  cudaEvent_t start, stop;
+  SAFE_CALL(cudaEventCreate(&start));
+  SAFE_CALL(cudaEventCreate(&stop));
+
+  SAFE_CALL(cudaEventRecord(start, 0));
   cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
+  SAFE_CALL(cudaEventRecord(stop, 0));
+
   cublasDestroy(handle);
+
+  SAFE_CALL(cudaMemcpy(c, cDevice, n2b, cudaMemcpyDeviceToHost));
+  float gpuTime = 0.0f;
+  SAFE_CALL(cudaEventElapsedTime(&gpuTime, start, stop));
+
+  double time = gpuTime * 1000;
+  return time;
 }
 
 void print_matrix(float* matrix, int rows, int cols) {
@@ -62,7 +75,6 @@ void fill_matrix(float* matrix, int rows, int cols) {
     }
   }
 }
-
 
 
 int main() {
@@ -86,32 +98,22 @@ int main() {
   fill_matrix(h_A, nr_rows_A, nr_cols_A);
   fill_matrix(h_B, nr_rows_B, nr_cols_B);
 
-  double start = clock();
-  SAFE_CALL(cudaMemcpy(d_A, h_A, nr_rows_A * nr_cols_A * sizeof(float), cudaMemcpyHostToDevice));
-  SAFE_CALL(cudaMemcpy(d_B, h_B, nr_rows_B * nr_cols_B * sizeof(float), cudaMemcpyHostToDevice));
-  double end = clock();
-
-  SAFE_CALL(cudaMemcpy(h_A, d_A, nr_rows_A * nr_cols_A * sizeof(float),cudaMemcpyDeviceToHost));
-  SAFE_CALL(cudaMemcpy(h_B, d_B, nr_rows_B * nr_cols_B * sizeof(float),cudaMemcpyDeviceToHost));
-
-
   printf("A = \n");
   print_matrix(h_A, 5, 5);
 
   printf("B = \n");
   print_matrix(h_B, 5, 5);
 
-  double start_ = clock();
-  gpu_blas_mmul(d_A, d_B, d_C, nr_rows_A, nr_cols_A, nr_cols_B);
-  //multiply(h_A, h_B, h_C_, nr_rows_A);
-  double end_ = clock();
+  cout << "gpu_blas_mmul time = " << gpu_blas_mmul(d_A, d_B, d_C, nr_rows_A, nr_cols_A, nr_cols_B) << " microseconds";
+  double start_consistent = clock();
+  matrix_mult(h_A, h_B, h_C_, nr_rows_A);
+  double end_consistent = clock();
 
-  SAFE_CALL(cudaMemcpy(h_C,d_C,nr_rows_C * nr_cols_C * sizeof(float),cudaMemcpyDeviceToHost));
+  SAFE_CALL(cudaMemcpy(h_C,d_C,nr_rows_C * nr_cols_C * sizeof(float), cudaMemcpyDeviceToHost));
   printf("C = \n");
   print_matrix(h_C, 5, 5);
 
-  //cout << "\nParallel mul time = " << (end_ - start_) / CLOCKS_PER_SEC << endl;
-  cout << "\nSendRecv time = " << (end - start) / CLOCKS_PER_SEC << endl;
+  cout << "\n Consistent mul time = " << ((end_consistent - start_consistent) / CLOCKS_PER_SEC) * 1000 * 1000 << endl;
 
   SAFE_CALL(cudaFree(d_A));
   SAFE_CALL(cudaFree(d_B));
