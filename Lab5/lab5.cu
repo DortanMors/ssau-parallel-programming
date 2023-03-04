@@ -67,7 +67,6 @@ double calculateGPU(const float *A, const float *B, float *C, const int m, const
 
     cublasDestroy(handle);
 
-    SAFE_CALL(cudaMemcpy(c, cDevice, n2b, cudaMemcpyDeviceToHost));
     float gpuTime = 0.0f;
     SAFE_CALL(cudaEventElapsedTime(&gpuTime, start, stop));
 
@@ -83,10 +82,12 @@ void testGPU(int squareSize) {
     int nr_rows_A, nr_cols_A, nr_rows_B, nr_cols_B, nr_rows_C, nr_cols_C;
     nr_rows_A = nr_cols_A = nr_rows_B = nr_cols_B = nr_rows_C = nr_cols_C = squareSize;
 
-    float *d_A, *d_B, *d_C;
+    float *d_A, *d_B, *d_C, *C;
+
     SAFE_CALL(cudaMalloc(&d_A, nr_rows_A * nr_cols_A * sizeof(float)));
     SAFE_CALL(cudaMalloc(&d_B, nr_rows_B * nr_cols_B * sizeof(float)));
     SAFE_CALL(cudaMalloc(&d_C, nr_rows_C * nr_cols_C * sizeof(float)));
+    C = (float *)malloc(nr_rows_A * nr_cols_A * sizeof(float));
 
     cudaEvent_t start, stop;
     SAFE_CALL(cudaEventCreate(&start));
@@ -94,6 +95,7 @@ void testGPU(int squareSize) {
     SAFE_CALL(cudaEventRecord(start, 0));
     GPU_fill_rand(d_A, nr_rows_A, nr_cols_A);
     GPU_fill_rand(d_B, nr_rows_B, nr_cols_B);
+    SAFE_CALL(cudaMemcpy(c, d_C, nr_rows_C * nr_cols_C * sizeof(float), cudaMemcpyDeviceToHost));
     SAFE_CALL(cudaDeviceSynchronize());
     SAFE_CALL(cudaEventRecord(stop, 0));
     float gpuTime = 0.0f;
@@ -104,7 +106,9 @@ void testGPU(int squareSize) {
 
     double gpuTime = calculateGPU(d_A, d_B, d_C, nr_rows_A, nr_cols_A, nr_cols_B);
     cout << "calculateGPU time = " << gpuTime << " microseconds";
+    print_matrix(C, nr_rows_C, nr_cols_C);
 
+    free(C);
     SAFE_CALL(cudaFree(d_A));
     SAFE_CALL(cudaFree(d_B));
     SAFE_CALL(cudaFree(d_C));
@@ -113,9 +117,13 @@ void testGPU(int squareSize) {
 void testCPU(int squareSize) {
     int nr_rows_A, nr_cols_A, nr_rows_B, nr_cols_B, nr_rows_C, nr_cols_C;
     nr_rows_A = nr_cols_A = nr_rows_B = nr_cols_B = nr_rows_C = nr_cols_C = squareSize;
+    float *d_A, *d_B;
     float *h_A = (float *)malloc(nr_rows_A * nr_cols_A * sizeof(float));
     float *h_B = (float *)malloc(nr_rows_B * nr_cols_B * sizeof(float));
     float *h_C = (float *)malloc(nr_rows_C * nr_cols_C * sizeof(float));
+
+    SAFE_CALL(cudaMalloc(&d_A, nr_rows_A * nr_cols_A * sizeof(float)));
+    SAFE_CALL(cudaMalloc(&d_B, nr_rows_B * nr_cols_B * sizeof(float)));
 
     double start_consistent = clock();
     fill_matrix(h_A, nr_rows_A, nr_cols_A);
@@ -126,10 +134,11 @@ void testCPU(int squareSize) {
     double cpuGenerateTime = ((clock() - start_consistent) / CLOCKS_PER_SEC) * 1000 * 1000;
     cout << "GPU create: " << cpuGenerateTime <<  " milliseconds\n";
 
-    start_consistent = clock()
+    start_consistent = clock();
     matrix_mult(h_A, h_B, h_C, nr_rows_A);
     double cpuTime = ((clock() - start_consistent) / CLOCKS_PER_SEC) * 1000 * 1000;
     cout << "calculateCPU time: " << cpuGenerateTime << " milliseconds\n";
+    print_matrix(h_C, nr_rows_C, nr_cols_C);
 
     free(h_A);
     free(h_B);
@@ -137,7 +146,6 @@ void testCPU(int squareSize) {
 
     SAFE_CALL(cudaFree(d_A));
     SAFE_CALL(cudaFree(d_B));
-    SAFE_CALL(cudaFree(d_C));
 }
 
 int main() {
