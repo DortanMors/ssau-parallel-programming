@@ -11,50 +11,57 @@ __global__ void addKernel(int* c, int* a, int* b, unsigned int size) {
     }
 }
 
-double calculateForParameters(int gridSize, int blockSize, int n) {
-    int n2b = n * sizeof(int);
+void calculateForParameters(int gridSize, int blockSize, int n, int maxTries) {
+    double gpuAverage = 0.0;
+    double cpuAverage = 0.0;
+    for (int k = 0; k < maxTries; ++k) {
+        int n2b = n * sizeof(int);
 
-    int* a = (int*) calloc(n, sizeof(int));
-    int* b = (int*) calloc(n, sizeof(int));
-    int* c = (int*) calloc(n, sizeof(int));
+        int* a = (int*) calloc(n, sizeof(int));
+        int* b = (int*) calloc(n, sizeof(int));
+        int* c = (int*) calloc(n, sizeof(int));
 
-    for (int i = 0; i < n; ++i) {
-        a[i] = i;
-        b[i] = i;
+        for (int i = 0; i < n; ++i) {
+            a[i] = i;
+            b[i] = i;
+        }
+        int* aDevice = NULL;
+        int* bDevice = NULL;
+        int* cDevice = NULL;
+        SAFE_CALL(cudaMalloc((void**) &aDevice, n2b));
+        SAFE_CALL(cudaMalloc((void**) &bDevice, n2b));
+        SAFE_CALL(cudaMalloc((void**) &cDevice, n2b));
+        cudaEvent_t start, stop;
+        SAFE_CALL(cudaEventCreate(&start));
+        SAFE_CALL(cudaEventCreate(&stop));
+        SAFE_CALL(cudaMemcpy(aDevice, a, n2b, cudaMemcpyHostToDevice));
+        SAFE_CALL(cudaMemcpy(bDevice, b, n2b, cudaMemcpyHostToDevice));
+        double startTime = clock();
+        for (int i = 0; i < n; ++i) {
+            c[i] = a[i] + b[i];
+        }
+        double cpuTime = (clock() - startTime) / CLOCKS_PER_SEC * 1000 * 1000;
+        SAFE_CALL(cudaEventRecord(start, 0));
+        addKernel <<< gridSize, blockSize >>> (cDevice, aDevice, bDevice, n);
+        SAFE_CALL(cudaDeviceSynchronize());
+        SAFE_CALL(cudaGetLastError());
+        SAFE_CALL(cudaMemcpy(c, cDevice, n2b, cudaMemcpyDeviceToHost));
+        SAFE_CALL(cudaEventRecord(stop, 0));
+        float gpuTime = 0.0f;
+        SAFE_CALL(cudaEventElapsedTime(&gpuTime, start, stop));
+
+        double time = gpuTime * 1000;
+        cudaEventDestroy(start);
+        cudaEventDestroy(stop);
+        cudaFree(aDevice);
+        cudaFree(bDevice);
+        cudaFree(cDevice);
+        free(a);
+        free(b);
+        free(c);
+        printf("cpu: %f, gpu: %f\n", cpuTime, gpuTime);
+        return time;
     }
-    int* aDevice = NULL;
-    int* bDevice = NULL;
-    int* cDevice = NULL;
-    SAFE_CALL(cudaMalloc((void**) &aDevice, n2b));
-    SAFE_CALL(cudaMalloc((void**) &bDevice, n2b));
-    SAFE_CALL(cudaMalloc((void**) &cDevice, n2b));
-    cudaEvent_t start, stop;
-    SAFE_CALL(cudaEventCreate(&start));
-    SAFE_CALL(cudaEventCreate(&stop));
-    SAFE_CALL(cudaMemcpy(aDevice, a, n2b, cudaMemcpyHostToDevice));
-    SAFE_CALL(cudaMemcpy(bDevice, b, n2b, cudaMemcpyHostToDevice));
-    SAFE_CALL(cudaEventRecord(start, 0));
-for (int i = 0; i < n; ++i) {
-        c[i] = a[i] + b[i];
-    }
-    //addKernel <<< gridSize, blockSize >>> (cDevice, aDevice, bDevice, n);
-    SAFE_CALL(cudaGetLastError());
-    SAFE_CALL(cudaDeviceSynchronize());
-    SAFE_CALL(cudaEventRecord(stop, 0));
-    SAFE_CALL(cudaMemcpy(c, cDevice, n2b, cudaMemcpyDeviceToHost));
-    float gpuTime = 0.0f;
-    SAFE_CALL(cudaEventElapsedTime(&gpuTime, start, stop));
-
-    double time = gpuTime * 1000;
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-    cudaFree(aDevice);
-    cudaFree(bDevice);
-    cudaFree(cDevice);
-    free(a);
-    free(b);
-    free(c);
-    return time;
 }
 
 double calculateConsistent(int n) {
@@ -106,9 +113,7 @@ int main(int argc, char* argv[]) {
         for (int j = 0; j < 6; ++j) {
             printf("[GridDim, BlockDim] = [%d, %d]: ", gridsAndBlocks[j][0], gridsAndBlocks[j][1]);
             double time = 0.0;
-            for (int k = 0; k < maxTries; ++k) {
-                time += calculateForParameters(gridsAndBlocks[j][0], gridsAndBlocks[j][1], n);
-            }
+            time += calculateForParameters(gridsAndBlocks[j][0], gridsAndBlocks[j][1], n);
             printf("%.4f\n", time / 12);
         }
     }
