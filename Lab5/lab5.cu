@@ -26,9 +26,9 @@ void matrix_mult(float* A, float* B, float* C, int N)
     int i, j, k;
     for (i = 0; i < N; i++) {
         for (j = 0; j < N; j++) {
-            C[i + j * N] = 0;
+            C[IDX2C(i, j, N)] = 0;
             for (k = 0; k < N; k++) {
-                C[i + j * N] += A[i + k * N] * B[k + j * N];
+                C[IDX2C(i, j, N)] += A[i + k * N] * B[k + j * N];
             }
         }
     }
