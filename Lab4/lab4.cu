@@ -5,29 +5,28 @@
 
 #define SAFE_CALL(CallInstruction) { cudaError_t cudaError = CallInstruction; if (cudaError != cudaSuccess) { printf("CUDA error: %s at call %s", cudaGetErrorString(cudaError), #CallInstruction); exit(0); } }
 
-__global__ void addKernel(int* c, int* a, int* b, unsigned int size) {
+__global__ void addKernel(double* c, double* a, double* b, unsigned int size) {
     for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < size; i += blockDim.x) {
         c[i] = a[i] + b[i];
     }
 }
 
-void calculateForParameters(int gridSize, int blockSize, int n, int maxTries) {
-    double gpuAverage = 0.0;
-    double cpuAverage = 0.0;
+double calculateForParameters(int gridSize, int blockSize, int n, int maxTries) {
+    double time = 0.0;
     for (int k = 0; k < maxTries; ++k) {
-        int n2b = n * sizeof(int);
+        int n2b = n * sizeof(double);
 
-        int* a = (int*) calloc(n, sizeof(int));
-        int* b = (int*) calloc(n, sizeof(int));
-        int* c = (int*) calloc(n, sizeof(int));
+        double* a = (double*) calloc(n, sizeof(double));
+        double* b = (double*) calloc(n, sizeof(double));
+        double* c = (double*) calloc(n, sizeof(double));
 
         for (int i = 0; i < n; ++i) {
             a[i] = i;
             b[i] = i;
         }
-        int* aDevice = NULL;
-        int* bDevice = NULL;
-        int* cDevice = NULL;
+        double* aDevice = NULL;
+        double* bDevice = NULL;
+        double* cDevice = NULL;
         SAFE_CALL(cudaMalloc((void**) &aDevice, n2b));
         SAFE_CALL(cudaMalloc((void**) &bDevice, n2b));
         SAFE_CALL(cudaMalloc((void**) &cDevice, n2b));
@@ -36,11 +35,6 @@ void calculateForParameters(int gridSize, int blockSize, int n, int maxTries) {
         SAFE_CALL(cudaEventCreate(&stop));
         SAFE_CALL(cudaMemcpy(aDevice, a, n2b, cudaMemcpyHostToDevice));
         SAFE_CALL(cudaMemcpy(bDevice, b, n2b, cudaMemcpyHostToDevice));
-        double startTime = clock();
-        for (int i = 0; i < n; ++i) {
-            c[i] = a[i] + b[i];
-        }
-        double cpuTime = (clock() - startTime) / CLOCKS_PER_SEC * 1000 * 1000;
         SAFE_CALL(cudaEventRecord(start, 0));
         addKernel <<< gridSize, blockSize >>> (cDevice, aDevice, bDevice, n);
         SAFE_CALL(cudaDeviceSynchronize());
@@ -48,9 +42,10 @@ void calculateForParameters(int gridSize, int blockSize, int n, int maxTries) {
         SAFE_CALL(cudaMemcpy(c, cDevice, n2b, cudaMemcpyDeviceToHost));
         SAFE_CALL(cudaEventRecord(stop, 0));
         float gpuTime = 0.0f;
+        SAFE_CALL(cudaDeviceSynchronize());
         SAFE_CALL(cudaEventElapsedTime(&gpuTime, start, stop));
 
-        double time = gpuTime * 1000;
+        time += gpuTime * 1000;
         cudaEventDestroy(start);
         cudaEventDestroy(stop);
         cudaFree(aDevice);
@@ -59,15 +54,14 @@ void calculateForParameters(int gridSize, int blockSize, int n, int maxTries) {
         free(a);
         free(b);
         free(c);
-        printf("cpu: %f, gpu: %f\n", cpuTime, gpuTime);
-        return time;
     }
+    return time / maxTries;
 }
 
 double calculateConsistent(int n) {
-    int* a = (int*) calloc(n, sizeof(int));
-    int* b = (int*) calloc(n, sizeof(int));
-    int* c = (int*) calloc(n, sizeof(int));
+    double* a = (double*) calloc(n, sizeof(double));
+    double* b = (double*) calloc(n, sizeof(double));
+    double* c = (double*) calloc(n, sizeof(double));
 
     for (int i = 0; i < n; ++i) {
         a[i] = i;
@@ -109,12 +103,12 @@ int main(int argc, char* argv[]) {
         for (int k = 0; k < maxTries; ++k) {
             cTime += calculateConsistent(n);
         }
-        printf("%.4f\n", cTime / 12);
+        printf("%.4f\n", cTime / maxTries);
+        printf("CUDA: ");
         for (int j = 0; j < 6; ++j) {
             printf("[GridDim, BlockDim] = [%d, %d]: ", gridsAndBlocks[j][0], gridsAndBlocks[j][1]);
-            double time = 0.0;
-            time += calculateForParameters(gridsAndBlocks[j][0], gridsAndBlocks[j][1], n);
-            printf("%.4f\n", time / 12);
+            double time = calculateForParameters(gridsAndBlocks[j][0], gridsAndBlocks[j][1], n, maxTries);
+            printf("%.4f\n", time);
         }
     }
     return 0;
